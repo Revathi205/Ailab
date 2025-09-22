@@ -1,0 +1,63 @@
+import random
+
+# Heuristic: number of pairs of queens attacking each other
+def calculate_cost(state):
+    cost = 0
+    n = len(state)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if state[i] == state[j] or abs(state[i] - state[j]) == abs(i - j):
+                cost += 1
+    return cost
+
+# Generate neighbors by moving one queen in each column
+def generate_neighbors(state):
+    neighbors = []
+    n = len(state)
+    for col in range(n):
+        for row in range(n):
+            if state[col] != row:
+                new_state = state.copy()
+                new_state[col] = row
+                neighbors.append(new_state)
+    return neighbors
+
+# Hill Climbing algorithm
+def hill_climbing(n=4):
+    # Random initial state
+    current_state = [random.randint(0, n-1) for _ in range(n)]
+    current_cost = calculate_cost(current_state)
+
+    print(f"Initial State: {current_state}, Cost = {current_cost}")
+
+    while True:
+        neighbors = generate_neighbors(current_state)
+        neighbor_costs = [(state, calculate_cost(state)) for state in neighbors]
+
+        # Pick the neighbor with the least cost
+        next_state, next_cost = min(neighbor_costs, key=lambda x: x[1])
+
+        print(f"Checking neighbors: {[cost for _, cost in neighbor_costs]}")
+        print(f"Best Neighbor: {next_state}, Cost = {next_cost}")
+
+        if next_cost >= current_cost:  # No better neighbor
+            break
+
+        current_state, current_cost = next_state, next_cost
+
+    return current_state, current_cost
+
+
+solution, cost = hill_climbing(4)
+print("\nFinal Solution:", solution, "with Cost =", cost)
+
+
+OUTPUT:
+
+Initial State: [1, 1, 2, 3], Cost = 4
+Checking neighbors: [6, 5, 4, 2, 3, 3, 3, 4, 4, 2, 5, 3]
+Best Neighbor: [1, 0, 2, 3], Cost = 2
+Checking neighbors: [4, 2, 2, 4, 3, 3, 2, 3, 3, 2, 3, 3]
+Best Neighbor: [2, 0, 2, 3], Cost = 2
+
+Final Solution: [1, 0, 2, 3] with Cost = 2
