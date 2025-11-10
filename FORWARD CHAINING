@@ -1,0 +1,117 @@
+from copy import deepcopy
+
+def unify(x, y, theta=None):
+    if theta is None:
+        theta = {}
+    if x == y:
+        return theta
+    elif isinstance(x, str) and x.islower():
+        return unify_var(x, y, theta)
+    elif isinstance(y, str) and y.islower():
+        return unify_var(y, x, theta)
+    elif isinstance(x, tuple) and isinstance(y, tuple) and len(x) == len(y):
+        for xi, yi in zip(x, y):
+            theta = unify(xi, yi, theta)
+            if theta is None:
+                return None
+        return theta
+    else:
+        return None
+
+def unify_var(var, x, theta):
+    if var in theta:
+        return unify(theta[var], x, theta)
+    elif x in theta:
+        return unify(var, theta[x], theta)
+    else:
+        theta[var] = x
+        return theta
+
+def subst(theta, x):
+    if isinstance(x, tuple):
+        return tuple(subst(theta, xi) for xi in x)
+    elif isinstance(x, str) and x.islower() and x in theta:
+        return subst(theta, theta[x])
+    else:
+        return x
+
+def parse_atom(atom_str):
+    atom_str = atom_str.strip()
+    pred, args = atom_str.split("(")
+    args = args[:-1].split(",")
+    return (pred.strip(), *[a.strip() for a in args])
+
+def normalize_atom(atom):
+    # ensures everything is clean and comparable
+    return tuple(a.strip() for a in atom)
+
+def generate_substitutions(KB, premises):
+    substitutions = [dict()]
+    for premise in premises:
+        new_subs = []
+        p_pred = parse_atom(premise)
+        for fact in KB:
+            if isinstance(fact, tuple) and fact[0] == p_pred[0]:
+                theta = unify(p_pred, fact)
+                if theta:
+                    for s in substitutions:
+                        s_new = deepcopy(s)
+                        s_new.update(theta)
+                        new_subs.append(s_new)
+        substitutions = new_subs
+    return substitutions
+
+def fol_fc_ask(KB, query):
+    query = normalize_atom(query)
+    new = set()
+    while True:
+        new = set()
+        for rule in KB:
+            if "=>" in rule:
+                premises, conclusion = rule.split("=>")
+                premises = [p.strip() for p in premises.split("&")]
+                conclusion = conclusion.strip()
+                for theta in generate_substitutions(KB, premises):
+                    q_prime = subst(theta, parse_atom(conclusion))
+                    q_prime = normalize_atom(q_prime)
+                    if q_prime not in KB and q_prime not in new:
+                        new.add(q_prime)
+                        print("Derived new fact:", q_prime)
+
+                        # Debug: show what we’re comparing
+                        print("Checking if", q_prime, "==", query)
+                        if q_prime == query:
+                            print("Match found!")
+                            return {}
+
+                        phi = unify(q_prime, query)
+                        if phi is not None:
+                            print("Unified with query:", phi)
+                            return phi
+        if not new:
+            return 
+        KB |= new
+
+# --- Example KB ---
+KB = {
+    parse_atom("Parent(John,Mary)"),
+    parse_atom("Parent(Mary,Sam)"),
+    "Parent(x,y) => Ancestor(x,y)",
+    "Parent(x,z) & Ancestor(z,y) => Ancestor(x,y)"
+}
+
+query = parse_atom("Ancestor(John,Sam)")
+
+result = fol_fc_ask(KB, query)
+
+OUTPUT:
+Derived new fact: ('Ancestor', 'John', 'Mary')
+Checking if ('Ancestor', 'John', 'Mary') == ('Ancestor', 'John', 'Sam')
+Derived new fact: ('Ancestor', 'Mary', 'Sam')
+Checking if ('Ancestor', 'Mary', 'Sam') == ('Ancestor', 'John', 'Sam')
+Derived new fact: ('Ancestor', 'Mary', 'Mary')
+Checking if ('Ancestor', 'Mary', 'Mary') == ('Ancestor', 'John', 'Sam')
+Derived new fact: ('Ancestor', 'John', 'Sam')
+Checking if ('Ancestor', 'John', 'Sam') == ('Ancestor', 'John', 'Sam')
+Match found!
+
