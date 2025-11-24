@@ -1,0 +1,153 @@
+from itertools import combinations
+
+# -------------------- Unification ----------------------------
+
+def is_var(x):
+    return isinstance(x, str) and x[0].islower()
+
+def unify(x, y, subst):
+    if subst is False:
+        return False
+    if x == y:
+        return subst
+    if is_var(x):
+        return unify_var(x, y, subst)
+    if is_var(y):
+        return unify_var(y, x, subst)
+    if isinstance(x, tuple) and isinstance(y, tuple):
+        if len(x) != len(y):
+            return False
+        for a, b in zip(x, y):
+            subst = unify(a, b, subst)
+        return subst
+    return False
+
+def unify_var(var, x, subst):
+    if var in subst:
+        return unify(subst[var], x, subst)
+    if occurs(var, x, subst):
+        return False
+    subst[var] = x
+    return subst
+
+def occurs(var, x, subst):
+    if var == x:
+        return True
+    if isinstance(x, tuple):
+        return any(occurs(var, t, subst) for t in x)
+    if x in subst:
+        return occurs(var, subst[x], subst)
+    return False
+
+# -------------------- Substitution ---------------------------
+
+def apply_subst(term, subst):
+    pred, args, sign = term
+    new_args = []
+    for a in args:
+        if isinstance(a, str):
+            new_args.append(subst.get(a, a))
+        else:
+            new_args.append(apply_subst(a, subst))
+    return (pred, tuple(new_args), sign)
+
+def apply_subst_clause(clause, subst):
+    return [apply_subst(lit, subst) for lit in clause]
+
+# -------------------- Resolution -----------------------------
+
+def resolve(c1, c2):
+    resolvents = []
+    for i, lit1 in enumerate(c1):
+        for j, lit2 in enumerate(c2):
+
+            # Complementary literals?
+            if lit1[0] == lit2[0] and lit1[2] != lit2[2]:
+
+                subst = unify(lit1[1], lit2[1], {})
+                if subst is False:
+                    continue
+
+                new_clause = (
+                    c1[:i] + c1[i+1:] +
+                    c2[:j] + c2[j+1:]
+                )
+                new_clause = apply_subst_clause(new_clause, subst)
+                new_clause = list(set(new_clause))  # remove duplicates
+
+                resolvents.append(new_clause)
+    return resolvents
+
+# -------------------------------------------------------------
+#    MINIMAL KNOWLEDGE BASE (3 clauses)
+# -------------------------------------------------------------
+
+KB = [
+
+    # John likes any food
+    [("Food", ("x",), False), ("Likes", ("John", "x"), True)],
+
+    # Anil eats peanuts
+    [("Eats", ("Anil", "Peanuts"), True)],
+
+    # Anything Anil eats is food
+    [("Eats", ("Anil", "y"), False), ("Food", ("y",), True)],
+]
+
+# Negated goal
+goal = [("Likes", ("John", "Peanuts"), False)]
+
+clauses = KB + [goal]
+
+# -------------------------------------------------------------
+#   Resolution Loop
+# -------------------------------------------------------------
+
+def resolution(clauses):
+    new = []
+
+    while True:
+        pairs = list(combinations(clauses, 2))
+
+        for (c1, c2) in pairs:
+            resolvents = resolve(c1, c2)
+
+            for r in resolvents:
+                print("Resolvent:", r)
+
+                if r == []:
+                    print("\n✓ Empty clause derived!")
+                    print("✓ Therefore: John likes peanuts.")
+                    return True
+
+                new.append(r)
+
+        if all(r in clauses for r in new):
+            print("\nNo new clauses. Cannot prove.")
+            return False
+
+        for r in new:
+            if r not in clauses:
+                clauses.append(r)
+
+print("RUNNING RESOLUTION...\n")
+resolution(clauses)
+               
+OUTPUT:
+RUNNING RESOLUTION...
+
+Resolvent: [('Eats', ('Anil', 'y'), False), ('Likes', ('John', 'y'), True)]
+Resolvent: [('Food', ('Peanuts',), False)]
+Resolvent: [('Food', ('Peanuts',), True)]
+Resolvent: [('Eats', ('Anil', 'y'), False), ('Likes', ('John', 'y'), True)]
+Resolvent: [('Food', ('Peanuts',), False)]
+Resolvent: [('Likes', ('John', 'Peanuts'), True)]
+Resolvent: [('Food', ('Peanuts',), True)]
+Resolvent: [('Likes', ('John', 'Peanuts'), True)]
+Resolvent: [('Eats', ('Anil', 'Peanuts'), False)]
+Resolvent: [('Eats', ('Anil', 'Peanuts'), False)]
+Resolvent: []
+
+✓ Empty clause derived!
+✓ Therefore: John likes peanuts.
+True               
